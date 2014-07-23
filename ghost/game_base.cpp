@@ -256,7 +256,25 @@ uint32_t CBaseGame :: GetNumHumanPlayers( )
 
 	return NumHumanPlayers;
 }
+uint32_t CBaseGame :: GetNumAutostartPlayers( )
+{
+        uint32_t NumAutostartPlayers = 0;
 
+        for( vector<CGamePlayer *> :: iterator i = m_Players.begin( ); i != m_Players.end( ); ++i )
+        {
+         	if( !(*i)->GetLeftMessageSent( ) )
+                {
+                 	char SID = GetSIDFromPID( (*i)->GetPID( ) );
+
+			if( SID < m_Slots.size( ) && ( m_Slots[SID].GetTeam( ) == 0 || m_Slots[SID].GetTeam( ) == 2 ) )
+                        {
+		                NumAutostartPlayers++;
+                        }
+		}
+        }
+
+        return NumAutostartPlayers;
+}
 string CBaseGame :: GetDescription( )
 {
 	string Description = m_GameName + " : " + m_OwnerName + " : " + UTIL_ToString( GetNumHumanPlayers( ) ) + "/" + UTIL_ToString( m_GameLoading || m_GameLoaded ? m_StartPlayers : m_Slots.size( ) );
@@ -410,6 +428,10 @@ bool CBaseGame :: Update( void *fd, void *send_fd )
 			// we also send 12 for SlotsOpen because Warcraft 3 assumes there's always at least one player in the game (the host)
 			// so if we try to send accurate numbers it'll always be off by one and results in Warcraft 3 assuming the game is full when it still needs one more player
 			// the easiest solution is to simply send 12 for both so the game will always show up as (1/12) players
+			uint32_t slotstotal = m_Slots.size( );
+			uint32_t slotsopen = GetSlotsOpen();
+			if (slotsopen<2) slotsopen = 2;
+			if(slotstotal > 12) slotstotal = 12;
 
 			if( m_SaveGame )
 			{
@@ -422,7 +444,7 @@ bool CBaseGame :: Update( void *fd, void *send_fd )
 				BYTEARRAY MapHeight;
 				MapHeight.push_back( 0 );
 				MapHeight.push_back( 0 );
-				m_GHost->m_UDPSocket->Broadcast( 6112, m_Protocol->SEND_W3GS_GAMEINFO( m_GHost->m_TFT, m_GHost->m_LANWar3Version, UTIL_CreateByteArray( MapGameType, false ), m_Map->GetMapGameFlags( ), MapWidth, MapHeight, m_GameName, "Varlock", GetTime( ) - m_CreationTime, "Save\\Multiplayer\\" + m_SaveGame->GetFileNameNoPath( ), m_SaveGame->GetMagicNumber( ), 12, 12, m_HostPort, FixedHostCounter, m_EntryKey ) );
+				m_GHost->m_UDPSocket->Broadcast( 6112, m_Protocol->SEND_W3GS_GAMEINFO( m_GHost->m_TFT, m_GHost->m_LANWar3Version, UTIL_CreateByteArray( MapGameType, false ), m_Map->GetMapGameFlags( ), MapWidth, MapHeight, m_GameName, "zh99998", GetTime( ) - m_CreationTime, "Save\\Multiplayer\\" + m_SaveGame->GetFileNameNoPath( ), m_SaveGame->GetMagicNumber( ), slotstotal, slotsopen, m_HostPort, FixedHostCounter, m_EntryKey ) );
 			}
 			else
 			{
@@ -430,7 +452,7 @@ bool CBaseGame :: Update( void *fd, void *send_fd )
 				// note: we do not use m_Map->GetMapGameType because none of the filters are set when broadcasting to LAN (also as you might expect)
 
 				uint32_t MapGameType = MAPGAMETYPE_UNKNOWN0;
-				m_GHost->m_UDPSocket->Broadcast( 6112, m_Protocol->SEND_W3GS_GAMEINFO( m_GHost->m_TFT, m_GHost->m_LANWar3Version, UTIL_CreateByteArray( MapGameType, false ), m_Map->GetMapGameFlags( ), m_Map->GetMapWidth( ), m_Map->GetMapHeight( ), m_GameName, "Varlock", GetTime( ) - m_CreationTime, m_Map->GetMapPath( ), m_Map->GetMapCRC( ), 12, 12, m_HostPort, FixedHostCounter, m_EntryKey ) );
+				m_GHost->m_UDPSocket->Broadcast( 6112, m_Protocol->SEND_W3GS_GAMEINFO( m_GHost->m_TFT, m_GHost->m_LANWar3Version, UTIL_CreateByteArray( MapGameType, false ), m_Map->GetMapGameFlags( ), m_Map->GetMapWidth( ), m_Map->GetMapHeight( ), m_GameName, "zh99998", GetTime( ) - m_CreationTime, m_Map->GetMapPath( ), m_Map->GetMapCRC( ), slotstotal, slotsopen, m_HostPort, FixedHostCounter, m_EntryKey ) );
 			}
 		}
 
@@ -1914,7 +1936,7 @@ void CBaseGame :: EventPlayerJoined( CPotentialPlayer *potential, CIncomingJoinP
 	// we have a slot for the new player
 	// make room for them by deleting the virtual host player if we have to
 
-	if( GetNumPlayers( ) >= 11 || EnforcePID == m_VirtualHostPID )
+	if( GetSlotsOccupied( ) >= m_Slots.size() - 1 || EnforcePID == m_VirtualHostPID )
 		DeleteVirtualHost( );
 
 	// turning the CPotentialPlayer into a CGamePlayer is a bit of a pain because we have to be careful not to close the socket
@@ -2304,7 +2326,7 @@ void CBaseGame :: EventPlayerJoinedWithScore( CPotentialPlayer *potential, CInco
 	// we have a slot for the new player
 	// make room for them by deleting the virtual host player if we have to
 
-	if( GetNumPlayers( ) >= 11 )
+	if( GetSlotsOccupied( ) >= m_Slots.size() - 1 )
 		DeleteVirtualHost( );
 
 	// identify their joined realm
@@ -4443,9 +4465,9 @@ void CBaseGame :: StartCountDownAuto( bool requireSpoofChecks )
 	{
 		// check if enough players are present
 
-		if( GetNumHumanPlayers( ) < m_AutoStartPlayers )
+		if( GetNumAutostartPlayers( ) < m_AutoStartPlayers )
 		{
-			SendAllChat( m_GHost->m_Language->WaitingForPlayersBeforeAutoStart( UTIL_ToString( m_AutoStartPlayers ), UTIL_ToString( m_AutoStartPlayers - GetNumHumanPlayers( ) ) ) );
+			// SendAllChat( m_GHost->m_Language->WaitingForPlayersBeforeAutoStart( UTIL_ToString( m_AutoStartPlayers ), UTIL_ToString( m_AutoStartPlayers - GetNumAutostartPlayers( ) ) ) );
 			return;
 		}
 
@@ -4588,7 +4610,7 @@ void CBaseGame :: CreateFakePlayer( )
 
 	if( SID < m_Slots.size( ) )
 	{
-		if( GetNumPlayers( ) >= 11 )
+		if( GetSlotsOccupied( ) >= m_Slots.size() - 1 )
 			DeleteVirtualHost( );
 
 		m_FakePlayerPID = GetNewPID( );

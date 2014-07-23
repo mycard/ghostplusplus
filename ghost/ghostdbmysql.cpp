@@ -67,7 +67,8 @@ CGHostDBMySQL :: CGHostDBMySQL( CConfig *CFG ) : CGHostDB( CFG )
 
 	my_bool Reconnect = true;
 	mysql_options( Connection, MYSQL_OPT_RECONNECT, &Reconnect );
-
+	mysql_options( Connection, MYSQL_SET_CHARSET_NAME, "utf8"); 
+	mysql_options( Connection, MYSQL_INIT_COMMAND, "SET NAMES utf8"); 
 	if( !( mysql_real_connect( Connection, m_Server.c_str( ), m_User.c_str( ), m_Password.c_str( ), m_Database.c_str( ), m_Port, NULL, 0 ) ) )
 	{
 		CONSOLE_Print( string( "[MYSQL] " ) + mysql_error( Connection ) );
